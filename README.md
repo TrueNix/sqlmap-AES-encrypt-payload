@@ -5,7 +5,7 @@
 Usage:
 find aes key by exploring source code
 
-open the script and paste the key and save it.
+open the aes-encrypt-payload.py script and paste the key and save it.
 
 $ sqlmap -l post.txt --tamper=aes-encrypt-payload.py --risk=3 --level=5 --dbs
 
