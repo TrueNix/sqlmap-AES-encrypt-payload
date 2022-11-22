@@ -16,3 +16,13 @@ TIP! if you cannot find the key open debugger and locate the encryption function
 
 Demo:
 https://youtu.be/cKLPvr2mi6c
+
+
+decryptor.py
+
+Standalone decryptor
+Accepts following flags missing error handling :)
+
+-f FILE, --file FILE 
+-k KEY, --key KEY  
+-c CIPHER, --cipher CIPHER
