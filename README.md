@@ -1,4 +1,4 @@
-# sqlmap-AES-encrypt-payload
+# AES Encryption Tamper Script for SQLMap
 
 
 ## Usage
