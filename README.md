@@ -1,6 +1,5 @@
 # sqlmap-AES-encrypt-payload
 
-Enhance the security of your SQL injection tests by encrypting and decrypting payloads using AES encryption with this tamper script for [sqlmap](http://sqlmap.org/).
 
 ## Usage
 
