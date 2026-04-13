@@ -1,0 +1,7 @@
+.aes-key
+*.key
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
