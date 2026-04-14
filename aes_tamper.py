@@ -34,13 +34,44 @@ from Crypto.Random import get_random_bytes
 try:
     from lib.core.enums import PRIORITY
     priority = PRIORITY.NORMAL
+    _IN_SQLMAP = True
 except ImportError:
     priority = "NORMAL"  # sqlmap not on path; standalone CLI mode
+    _IN_SQLMAP = False
+
+
+def _patch_response_handler():
+    """Monkey-patch sqlmap's HTTP connect to decrypt AES-encrypted responses."""
+    if not _IN_SQLMAP:
+        return
+    try:
+        import lib.request.connect as _conn
+        _original_connect = _conn.connect
+
+        def _patched_connect(*args, **kwargs):
+            page, code, headers = _original_connect(*args, **kwargs)
+            if page and _load_key():
+                try:
+                    import json as _json
+                    parsed = _json.loads(page)
+                    if isinstance(parsed, dict):
+                        if "data" in parsed:
+                            parsed["data"] = decrypt(parsed["data"], _load_key())
+                        if "error" in parsed:
+                            parsed["error"] = decrypt(parsed["error"], _load_key())
+                    page = _json.dumps(parsed)
+                except Exception:
+                    pass
+            return page, code, headers
+
+        _conn.connect = _patched_connect
+    except Exception:
+        pass
 
 
 def dependencies():
     """List dependencies for sqlmap. pycryptodome is assumed installed."""
-    pass
+    _patch_response_handler()
 
 
 # ---------------------------------------------------------------------------
