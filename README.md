@@ -1,10 +1,8 @@
 # sqlmap AES Tamper Script
 
 A sqlmap tamper script that encrypts SQL injection payloads with AES-256-CBC
-before they are sent to the target. This enables testing applications that
-encrypt request parameters client-side.
-
-Also includes a standalone CLI for encrypting/decrypting payloads independently.
+**and decrypts server responses**, enabling sqlmap to test applications that
+encrypt all request/response traffic client-side.
 
 ## Requirements
 
@@ -30,13 +28,12 @@ pip install pycryptodome
      # edit .aes-key with your passphrase
      ```
 
-   - **CLI flag**: pass `--key` directly when using the standalone CLI (see below).
+   - **CLI flag**: pass `--key` directly when using the standalone CLI.
 
-2. **Place the script** where sqlmap can find it:
+2. **Run sqlmap** — the tamper handles both encryption and decryption:
    ```bash
-   # sqlmap automatically discovers scripts in its tamper directory,
-   # or you can pass an absolute path:
-   sqlmap -u "http://target/vuln?id=1" --tamper=/path/to/aes_tamper.py
+   sqlmap -u "http://target/vuln" --data="q=1" \
+     --tamper=aes_tamper.py --level=5 --risk=3 --tables
    ```
 
 ## Usage
@@ -44,36 +41,48 @@ pip install pycryptodome
 ### As a sqlmap tamper
 
 ```bash
-sqlmap -l post.txt --tamper=aes_tamper.py --risk=3 --level=5 --dbs
+sqlmap -u "http://target/vuln" --data="q=1" \
+  --tamper=aes_tamper.py --level=5 --risk=3 --dbs
 ```
 
-The tamper reads the key from `SQLMAP_AES_KEY` or `.aes-key` on first load
-and caches it for subsequent payloads.
+The tamper:
+1. **Encrypts** every outgoing payload with AES-256-CBC before sqlmap sends it
+2. **Decrypts** every server response so sqlmap can compare responses and detect injections
 
-### As a standalone CLI tool
+This means no separate decrypt proxy is needed — the tamper is self-contained.
+
+### As a standalone CLI
 
 ```bash
 # Encrypt
 python aes_tamper.py encrypt --key "mysecret" "' OR 1=1--"
 
-# Decrypt (use the base64 output from encrypt)
+# Decrypt
 python aes_tamper.py decrypt --key "mysecret" "U2FsdGVkX1+..."
-
-# Read from file
-python aes_tamper.py encrypt --key "mysecret" "$(cat payload.txt)"
 ```
 
-## How it works
+## How It Works
 
-1. sqlmap generates a SQLi payload (e.g. `' OR 1=1--`)
-2. The tamper encrypts it with AES-256-CBC using your key
-3. The encrypted, base64-encoded payload is sent to the target
-4. The target decrypts it server-side and passes it to the database
+### Encryption (outbound)
 
-**Encryption format**: OpenSSL-compatible `Salted__` format (CryptoJS compatible).
-- Key derivation: EVP_BytesToKey with MD5 (32-byte key + 16-byte IV)
-- Mode: AES-256-CBC with PKCS#7 padding
-- Output: `base64("Salted__" + 8-byte salt + ciphertext)`
+sqlmap generates a payload → tamper encrypts it with AES-256-CBC → encrypted base64 payload is sent to the target.
+
+### Decryption (inbound)
+
+The tamper monkey-patches sqlmap's `lib.request.connect.connect` function to intercept all HTTP responses. When a JSON response contains `data` or `error` fields, the tamper decrypts them and returns the plaintext to sqlmap. This allows sqlmap's response comparison engine to work normally.
+
+```
+sqlmap core
+  ├── sends payload → tamper.encrypt() → target
+  └── receives response ← tamper.decrypt() ← target
+```
+
+### Encryption format
+
+OpenSSL-compatible `Salted__` format (CryptoJS compatible):
+- **Key derivation**: EVP_BytesToKey with MD5 (32-byte key + 16-byte IV)
+- **Mode**: AES-256-CBC with PKCS#7 padding
+- **Output**: `base64("Salted__" + 8-byte salt + ciphertext)`
 
 ## Finding the key
 
@@ -82,6 +91,7 @@ You need the same AES key the application uses for client-side encryption:
 - **Source code review**: search the JS/frontend code for the encryption key
 - **Debugger**: set breakpoints on the encryption function to inspect the key at runtime
 - **Network analysis**: if the key is transmitted during session setup
+- **Page source**: look for HTML comments or inline scripts containing the key
 
 ## Disclaimer
 
